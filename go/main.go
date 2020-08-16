@@ -962,12 +962,11 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		type TransactionShipment struct {
 			ID        int64  `db:"id"`
 			Status    string `db:"status"`
-			ItemID    int64  `db:"item_id"`
 			ReserveID string `db:"reserve_id"`
 		}
 
 		ts := TransactionShipment{}
-		err = tx.Get(&ts, "SELECT t.id, t.status, t.item_id, s.reserve_id FROM `transaction_evidences` AS t INNER JOIN `shippings` AS s ON t.id = s.transaction_evidence_id WHERE `item_id` = ?", item.ID)
+		err = tx.Get(&ts, "SELECT t.id, t.status, s.reserve_id FROM `transaction_evidences` AS t INNER JOIN `shippings` AS s ON t.id = s.transaction_evidence_id WHERE `item_id` = ?", item.ID)
 
 		if err == sql.ErrNoRows {
 			outputErrorMsg(w, http.StatusNotFound, "shipping not found")
