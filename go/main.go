@@ -1021,24 +1021,24 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			shipIDValue := shipID.Int64
 			shipStatusValue := shipStatus.String
 			reserveIDValue := reserveID.String
+			itemDetail.TransactionEvidenceID = shipIDValue
+			itemDetail.TransactionEvidenceStatus = shipStatusValue
 
 			wait.Add(1)
-			var ssr *APIShipmentStatusRes
 			go func() {
-				ssr, err = APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
+				ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
 					ReserveID: reserveIDValue,
 				})
+				if err != nil {
+					log.Print(err)
+					outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
+					return
+				}
+
+				itemDetail.ShippingStatus = ssr.Status
 				wait.Done()
 			}()
 
-			if err != nil {
-				log.Print(err)
-				outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
-				return
-			}
-			itemDetail.TransactionEvidenceID = shipIDValue
-			itemDetail.TransactionEvidenceStatus = shipStatusValue
-			itemDetail.ShippingStatus = ssr.Status
 		}
 		itemDetails = append(itemDetails, itemDetail)
 	}
