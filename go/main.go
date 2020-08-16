@@ -869,19 +869,38 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tx := dbx.MustBegin()
-	items := []Item{}
+	var rows *sqlx.Rows
 	if itemID > 0 && createdAt > 0 {
 		// paging
-		err := tx.Select(&items,
-			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND `status` IN (?,?,?,?,?) AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+		query := `
+			SELECT 
+				i.id, 
+				i.seller_id, 
+				i.status, 
+				i.name, 
+				i.description, 
+				i.image_name, 
+				i.category_id,
+				i.created_at, 
+				i.buyer_id, 
+				ship.id as ship_id, 
+				ship.reserve_id,
+				ship.status as ship_status
+			FROM items AS i
+			LEFT JOIN (
+				SELECT 
+					t.id, t.status, t.item_id, s.reserve_id 
+				FROM transaction_evidences AS t 
+				INNER JOIN shippings AS s 
+				ON t.id = s.transaction_evidence_id 
+			) AS ship ON i.id = ship.item_id
+			WHERE (i.seller_id = ? OR i.buyer_id = ?)
+				AND (i.created_at < ? OR (i.created_at <= ? AND i.id < ?))
+			ORDER BY i.created_at DESC, i.id DESC LIMIT ?
+			`
+		rows, err = dbx.Queryx(query,
 			user.ID,
 			user.ID,
-			ItemStatusOnSale,
-			ItemStatusTrading,
-			ItemStatusSoldOut,
-			ItemStatusCancel,
-			ItemStatusStop,
 			time.Unix(createdAt, 0),
 			time.Unix(createdAt, 0),
 			itemID,
@@ -890,46 +909,86 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
-			tx.Rollback()
 			return
 		}
 	} else {
 		// 1st page
-		err := tx.Select(&items,
-			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND `status` IN (?,?,?,?,?) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
+		query := `
+			SELECT
+				i.id, 
+				i.seller_id, 
+				i.status, 
+				i.name, 
+				i.description, 
+				i.image_name, 
+				i.category_id,
+				i.created_at, 
+				i.buyer_id, 
+				ship.id as ship_id, 
+				ship.reserve_id,
+				ship.status as ship_status
+			FROM items as i
+			LEFT JOIN (
+				SELECT 
+					t.id, t.status, t.item_id, s.reserve_id
+				FROM transaction_evidences AS t
+				INNER JOIN shippings AS s
+				ON t.id = s.transaction_evidence_id
+			) AS ship ON i.id = ship.item_id
+			WHERE (i.seller_id = ? OR i.buyer_id = ?)
+			ORDER BY i.created_at DESC, items.id DESC LIMIT ?
+			`
+		rows, err = dbx.Queryx(query,
 			user.ID,
 			user.ID,
-			ItemStatusOnSale,
-			ItemStatusTrading,
-			ItemStatusSoldOut,
-			ItemStatusCancel,
-			ItemStatusStop,
 			TransactionsPerPage+1,
 		)
 		if err != nil {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
-			tx.Rollback()
 			return
 		}
 	}
 
 	itemDetails := []ItemDetail{}
-	for _, item := range items {
-		seller, err := getUserSimpleByID(tx, item.SellerID)
+	var wait sync.WaitGroup
+	for rows.Next() {
+		item := Item{}
+		var shipID int64
+		var reserveID string
+		var shipStatus string
+		err := rows.Scan(
+			&item.ID,
+			&item.SellerID,
+			&item.Status,
+			&item.Name,
+			&item.Description,
+			&item.ImageName,
+			&item.CategoryID,
+			&item.CreatedAt,
+			&item.BuyerID,
+			&shipID,
+			&reserveID,
+			&shipStatus,
+		)
+
 		if err != nil {
-			outputErrorMsg(w, http.StatusNotFound, "seller not found")
-			tx.Rollback()
-			return
-		}
-		category, err := getCategoryByID(tx, item.CategoryID)
-		if err != nil {
-			outputErrorMsg(w, http.StatusNotFound, "category not found")
-			tx.Rollback()
+			log.Print(err)
+			outputErrorMsg(w, http.StatusInternalServerError, "db error")
 			return
 		}
 
-		itemDetail := ItemDetail{
+		seller, err := getUserSimpleByID(dbx, item.SellerID)
+		if err != nil {
+			outputErrorMsg(w, http.StatusNotFound, "seller not found")
+			return
+		}
+		category, err := getCategoryByID(dbx, item.CategoryID)
+		if err != nil {
+			outputErrorMsg(w, http.StatusNotFound, "category not found")
+			return
+		}
+		itemDetail := &ItemDetail{
 			ID:       item.ID,
 			SellerID: item.SellerID,
 			Seller:   &seller,
@@ -949,40 +1008,22 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if item.BuyerID != 0 {
-			buyer, err := getUserSimpleByID(tx, item.BuyerID)
+			buyer, err := getUserSimpleByID(dbx, item.BuyerID)
 			if err != nil {
 				outputErrorMsg(w, http.StatusNotFound, "buyer not found")
-				tx.Rollback()
 				return
 			}
 			itemDetail.BuyerID = item.BuyerID
 			itemDetail.Buyer = &buyer
 		}
 
-		type TransactionShipment struct {
-			ID        int64  `db:"id"`
-			Status    string `db:"status"`
-			ItemID    int64  `db:"item_id"`
-			ReserveID string `db:"reserve_id"`
-		}
+		if shipID > 0 {
 
-		ts := TransactionShipment{}
-		err = tx.Get(&ts, "SELECT t.id, t.status, t.item_id, s.reserve_id FROM `transaction_evidences` AS t INNER JOIN `shippings` AS s ON t.id = s.transaction_evidence_id WHERE s.item_id = ?", item.ID)
-
-		if err != nil && err != sql.ErrNoRows {
-			log.Print(err)
-			outputErrorMsg(w, http.StatusInternalServerError, "db error")
-			tx.Rollback()
-		}
-
-		if ts.ID > 0 {
-
-			var wait sync.WaitGroup
 			wait.Add(1)
 			var ssr *APIShipmentStatusRes
 			go func() {
 				ssr, err = APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
-					ReserveID: ts.ReserveID,
+					ReserveID: reserveID,
 				})
 				wait.Done()
 			}()
@@ -991,17 +1032,13 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				log.Print(err)
 				outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
-				tx.Rollback()
 				return
 			}
-			itemDetail.TransactionEvidenceID = ts.ID
-			itemDetail.TransactionEvidenceStatus = ts.Status
+			itemDetail.TransactionEvidenceID = shipID
+			itemDetail.TransactionEvidenceStatus = shipStatus
 			itemDetail.ShippingStatus = ssr.Status
 		}
-
-		itemDetails = append(itemDetails, itemDetail)
 	}
-	tx.Commit()
 
 	hasNext := false
 	if len(itemDetails) > TransactionsPerPage {
