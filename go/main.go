@@ -954,9 +954,9 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	var wait sync.WaitGroup
 	for rows.Next() {
 		item := Item{}
-		var shipID int64
-		var reserveID string
-		var shipStatus string
+		shipID := sql.NullInt64{}
+		reserveID := sql.NullString{}
+		shipStatus := sql.NullString{}
 		err := rows.Scan(
 			&item.ID,
 			&item.SellerID,
@@ -1017,13 +1017,15 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			itemDetail.Buyer = &buyer
 		}
 
-		if shipID > 0 {
-
+		if shipID.Valid && reserveID.Valid {
+			shipIDValue := shipID.Int64
+			shipStatusValue := shipStatus.String
+			reserveIDValue := reserveID.String
 			wait.Add(1)
 			var ssr *APIShipmentStatusRes
 			go func() {
 				ssr, err = APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
-					ReserveID: reserveID,
+					ReserveID: reserveIDValue,
 				})
 				wait.Done()
 			}()
@@ -1034,8 +1036,8 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
 				return
 			}
-			itemDetail.TransactionEvidenceID = shipID
-			itemDetail.TransactionEvidenceStatus = shipStatus
+			itemDetail.TransactionEvidenceID = shipIDValue
+			itemDetail.TransactionEvidenceStatus = shipStatusValue
 			itemDetail.ShippingStatus = ssr.Status
 		}
 	}
