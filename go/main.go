@@ -936,7 +936,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				ON t.id = s.transaction_evidence_id
 			) AS ship ON i.id = ship.item_id
 			WHERE (i.seller_id = ? OR i.buyer_id = ?)
-			ORDER BY i.created_at DESC, items.id DESC LIMIT ?
+			ORDER BY i.created_at DESC, i.id DESC LIMIT ?
 			`
 		rows, err = dbx.Queryx(query,
 			user.ID,
