@@ -967,7 +967,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		ts := TransactionShipment{}
-		err = tx.Get(&ts, "SELECT t.id, t.status, t.item_id, s.reserve_id FROM `transaction_evidences` AS t INNER JOIN `shippings` AS s ON t.id = s.transaction_evidence_id WHERE t.item_id = ?", item.ID)
+		err = tx.Get(&ts, "SELECT t.id, t.status, t.item_id, s.reserve_id FROM `transaction_evidences` AS t RIGHT JOIN `shippings` AS s ON t.id = s.transaction_evidence_id WHERE t.item_id = ?", item.ID)
 
 		if err == sql.ErrNoRows {
 			outputErrorMsg(w, http.StatusNotFound, "shipping not found")
@@ -980,19 +980,21 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
 			tx.Rollback()
 		}
-		ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
-			ReserveID: ts.ReserveID,
-		})
-		if err != nil {
-			log.Print(err)
-			outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
-			tx.Rollback()
-			return
-		}
 
-		itemDetail.TransactionEvidenceID = ts.ID
-		itemDetail.TransactionEvidenceStatus = ts.Status
-		itemDetail.ShippingStatus = ssr.Status
+		if ts.ID > 0 {
+			ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
+				ReserveID: ts.ReserveID,
+			})
+			if err != nil {
+				log.Print(err)
+				outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
+				tx.Rollback()
+				return
+			}
+			itemDetail.TransactionEvidenceID = ts.ID
+			itemDetail.TransactionEvidenceStatus = ts.Status
+			itemDetail.ShippingStatus = ssr.Status
+		}
 
 		itemDetails = append(itemDetails, itemDetail)
 	}
