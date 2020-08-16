@@ -195,8 +195,8 @@ type resUserItems struct {
 }
 
 type resTransactions struct {
-	HasNext bool         `json:"has_next"`
-	Items   []ItemDetail `json:"items"`
+	HasNext bool          `json:"has_next"`
+	Items   []*ItemDetail `json:"items"`
 }
 
 type reqRegister struct {
@@ -950,7 +950,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	itemDetails := []ItemDetail{}
+	itemDetails := []*ItemDetail{}
 	var wait sync.WaitGroup
 	for rows.Next() {
 		item := Item{}
@@ -1040,6 +1040,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			itemDetail.TransactionEvidenceStatus = shipStatusValue
 			itemDetail.ShippingStatus = ssr.Status
 		}
+		itemDetails = append(itemDetails, itemDetail)
 	}
 
 	hasNext := false
