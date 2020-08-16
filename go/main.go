@@ -1021,6 +1021,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			shipIDValue := shipID.Int64
 			shipStatusValue := shipStatus.String
 			reserveIDValue := reserveID.String
+
 			wait.Add(1)
 			var ssr *APIShipmentStatusRes
 			go func() {
@@ -1029,7 +1030,6 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				})
 				wait.Done()
 			}()
-			wait.Wait()
 
 			if err != nil {
 				log.Print(err)
@@ -1042,6 +1042,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 		itemDetails = append(itemDetails, itemDetail)
 	}
+	wait.Wait()
 
 	hasNext := false
 	if len(itemDetails) > TransactionsPerPage {
