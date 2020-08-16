@@ -50,6 +50,8 @@ type APIShipmentStatusReq struct {
 	ReserveID string `json:"reserve_id"`
 }
 
+// 加盟店IDに紐付くAPIキー・加盟店IDに紐付くトークン・値段を送ると実際に決済が行われる
+// 残高不足などの理由で正当なカード番号でも決済に失敗するケースがある
 func APIPaymentToken(paymentURL string, param *APIPaymentServiceTokenReq) (*APIPaymentServiceTokenRes, error) {
 	b, _ := json.Marshal(param)
 
@@ -84,6 +86,8 @@ func APIPaymentToken(paymentURL string, param *APIPaymentServiceTokenReq) (*APIP
 	return pstr, nil
 }
 
+// 集荷予約の作成
+// 配送先の住所・配送元の住所・名前を送ると数字10桁のid（集荷予約ID）が送られてくる
 func APIShipmentCreate(shipmentURL string, param *APIShipmentCreateReq) (*APIShipmentCreateRes, error) {
 	b, _ := json.Marshal(param)
 
