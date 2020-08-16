@@ -54,7 +54,6 @@ type APIShipmentStatusReq struct {
 // 残高不足などの理由で正当なカード番号でも決済に失敗するケースがある
 func APIPaymentToken(paymentURL string, param *APIPaymentServiceTokenReq) (*APIPaymentServiceTokenRes, error) {
 	b, _ := json.Marshal(param)
-
 	req, err := http.NewRequest(http.MethodPost, paymentURL+"/token", bytes.NewBuffer(b))
 	if err != nil {
 		return nil, err

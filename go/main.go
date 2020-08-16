@@ -1564,6 +1564,31 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 
 	tx := dbx.MustBegin()
 
+	shipping := Shipping{}
+	err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ? FOR UPDATE", transactionEvidence.ID)
+	if err == sql.ErrNoRows {
+		outputErrorMsg(w, http.StatusNotFound, "shippings not found")
+		tx.Rollback()
+		return
+	}
+	if err != nil {
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		tx.Rollback()
+		return
+	}
+
+	var wait sync.WaitGroup
+	wait.Add(1)
+	var img []byte
+	var imgErr error
+	go func() {
+		img, imgErr = APIShipmentRequest(getShipmentServiceURL(), &APIShipmentRequestReq{
+			ReserveID: shipping.ReserveID,
+		})
+		wait.Done()
+	}()
+
 	item := Item{}
 	err = tx.Get(&item, "SELECT * FROM `items` WHERE `id` = ? FOR UPDATE", itemID)
 	if err == sql.ErrNoRows {
@@ -1603,25 +1628,9 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shipping := Shipping{}
-	err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ? FOR UPDATE", transactionEvidence.ID)
-	if err == sql.ErrNoRows {
-		outputErrorMsg(w, http.StatusNotFound, "shippings not found")
-		tx.Rollback()
-		return
-	}
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
-		return
-	}
-
-	img, err := APIShipmentRequest(getShipmentServiceURL(), &APIShipmentRequestReq{
-		ReserveID: shipping.ReserveID,
-	})
-	if err != nil {
-		log.Print(err)
+	wait.Wait()
+	if imgErr != nil {
+		log.Print(imgErr)
 		outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
 		tx.Rollback()
 
