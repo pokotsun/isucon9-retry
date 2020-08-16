@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -1386,28 +1387,45 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scr, err := APIShipmentCreate(getShipmentServiceURL(), &APIShipmentCreateReq{
-		ToAddress:   buyer.Address,
-		ToName:      buyer.AccountName,
-		FromAddress: seller.Address,
-		FromName:    seller.AccountName,
-	})
-	if err != nil {
-		log.Print(err)
+	var wait sync.WaitGroup
+
+	wait.Add(1)
+	var scr *APIShipmentCreateRes
+	var scErr error
+	go func() {
+		scr, err = APIShipmentCreate(getShipmentServiceURL(), &APIShipmentCreateReq{
+			ToAddress:   buyer.Address,
+			ToName:      buyer.AccountName,
+			FromAddress: seller.Address,
+			FromName:    seller.AccountName,
+		})
+		wait.Done()
+	}()
+
+	wait.Add(1)
+	var pstr *APIPaymentServiceTokenRes
+	var psErr error
+	go func() {
+		pstr, psErr = APIPaymentToken(getPaymentServiceURL(), &APIPaymentServiceTokenReq{
+			ShopID: PaymentServiceIsucariShopID,
+			Token:  rb.Token,
+			APIKey: PaymentServiceIsucariAPIKey,
+			Price:  targetItem.Price,
+		})
+		wait.Done()
+	}()
+	wait.Wait()
+
+	if scErr != nil {
+		log.Print(scErr)
 		outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
 		tx.Rollback()
 
 		return
 	}
 
-	pstr, err := APIPaymentToken(getPaymentServiceURL(), &APIPaymentServiceTokenReq{
-		ShopID: PaymentServiceIsucariShopID,
-		Token:  rb.Token,
-		APIKey: PaymentServiceIsucariAPIKey,
-		Price:  targetItem.Price,
-	})
-	if err != nil {
-		log.Print(err)
+	if psErr != nil {
+		log.Print(psErr)
 
 		outputErrorMsg(w, http.StatusInternalServerError, "payment service is failed")
 		tx.Rollback()
