@@ -976,9 +976,18 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if ts.ID > 0 {
-			ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
-				ReserveID: ts.ReserveID,
-			})
+
+			var wait sync.WaitGroup
+			wait.Add(1)
+			var ssr *APIShipmentStatusRes
+			go func() {
+				ssr, err = APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
+					ReserveID: ts.ReserveID,
+				})
+				wait.Done()
+			}()
+			wait.Wait()
+
 			if err != nil {
 				log.Print(err)
 				outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
