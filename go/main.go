@@ -967,7 +967,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		ts := TransactionShipment{}
-		err = tx.Get(&ts, "SELECT t.id, t.status, t.item_id, s.reserve_id FROM `transaction_evidences` AS t INNER JOIN `shippings` AS s ON t.id = s.transaction_evidence_id WHERE `t.item_id` = ?", item.ID)
+		err = tx.Get(&ts, "SELECT t.id, t.status, t.item_id, s.reserve_id FROM `transaction_evidences` AS t INNER JOIN `shippings` AS s ON t.id = s.transaction_evidence_id WHERE t.item_id = ?", item.ID)
 
 		if err == sql.ErrNoRows {
 			outputErrorMsg(w, http.StatusNotFound, "shipping not found")
