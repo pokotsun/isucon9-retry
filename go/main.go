@@ -1383,7 +1383,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 
 	// sellerの情報を取得
 	seller := User{}
-	err = tx.Get(&seller, "SELECT * FROM `users` WHERE `id` = ? FOR UPDATE", targetItem.SellerID)
+	seller, err = getUserWithCache(tx, targetItem.SellerID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "seller not found")
 		tx.Rollback()
