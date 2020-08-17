@@ -377,6 +377,22 @@ func getCSRFToken(r *http.Request) string {
 	return csrfToken.(string)
 }
 
+var userMap sync.Map
+
+func getUserWithCache(q sqlx.Queryer, userID int64) (User, error) {
+	cached, ok := userMap.Load(userID)
+	if ok {
+		return cached.(User), nil
+	}
+
+	user := User{}
+	err := sqlx.Get(q, &user, "SELECT * FROM `users` WHERE `id` = ?", userID)
+	if err == nil {
+		userMap.Store(userID, user)
+	}
+	return user, err
+}
+
 func getUser(r *http.Request) (user User, errCode int, errMsg string) {
 	session := getSession(r)
 	userID, ok := session.Values["user_id"]
@@ -384,7 +400,8 @@ func getUser(r *http.Request) (user User, errCode int, errMsg string) {
 		return user, http.StatusNotFound, "no session"
 	}
 
-	err := dbx.Get(&user, "SELECT * FROM `users` WHERE `id` = ?", userID)
+	var err error
+	user, err = getUserWithCache(dbx, userID.(int64))
 	if err == sql.ErrNoRows {
 		return user, http.StatusNotFound, "user not found"
 	}
@@ -398,7 +415,7 @@ func getUser(r *http.Request) (user User, errCode int, errMsg string) {
 
 func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err error) {
 	user := User{}
-	err = sqlx.Get(q, &user, "SELECT * FROM `users` WHERE `id` = ?", userID)
+	user, err = getUserWithCache(q, userID)
 	if err != nil {
 		return userSimple, err
 	}
