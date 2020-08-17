@@ -2129,7 +2129,7 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		return
 	}
-	user.NumSellItems = seller.NumSellItems + 1
+	user.NumSellItems = user.NumSellItems + 1
 	user.LastBump = now
 	updateUserWithCache(user, seller.ID)
 
