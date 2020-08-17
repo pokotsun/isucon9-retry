@@ -2174,7 +2174,7 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 	}
 
 	seller := User{}
-	err = tx.Get(&seller, "SELECT * FROM `users` WHERE `id` = ? FOR UPDATE", user.ID)
+	seller, err := getUserWithCache(tx, user.ID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "user not found")
 		tx.Rollback()
@@ -2206,14 +2206,8 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err = getUserWithCache(tx, seller.ID)
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
-	}
-	user.LastBump = now
-	updateUserWithCache(user, seller.ID)
+	seller.LastBump = now
+	updateUserWithCache(seller, seller.ID)
 
 	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ?", itemID)
 	if err != nil {
