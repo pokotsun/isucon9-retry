@@ -2081,23 +2081,14 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx := dbx.MustBegin()
-
-	seller := User{}
-	err = tx.Get(&seller, "SELECT * FROM `users` WHERE `id` = ? FOR UPDATE", user.ID)
-	if err == sql.ErrNoRows {
-		outputErrorMsg(w, http.StatusNotFound, "user not found")
-		tx.Rollback()
-		return
-	}
+	seller, err := getUserWithCache(dbx, user.ID)
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
 		return
 	}
 
-	result, err := tx.Exec("INSERT INTO `items` (`seller_id`, `status`, `name`, `price`, `description`,`image_name`,`category_id`) VALUES (?, ?, ?, ?, ?, ?, ?)",
+	result, err := dbx.Exec("INSERT INTO `items` (`seller_id`, `status`, `name`, `price`, `description`,`image_name`,`category_id`) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		seller.ID,
 		ItemStatusOnSale,
 		name,
@@ -2108,7 +2099,6 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		log.Print(err)
-
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		return
 	}
@@ -2122,18 +2112,10 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
-	user, err = getUserWithCache(tx, seller.ID)
-	if err != nil {
-		log.Print(err)
 
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
-	}
-	user.NumSellItems = user.NumSellItems + 1
-	user.LastBump = now
-	updateUserWithCache(user, seller.ID)
-
-	tx.Commit()
+	seller.NumSellItems++
+	seller.LastBump = now
+	updateUserWithCache(seller, seller.ID)
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(resSell{ID: itemID})
