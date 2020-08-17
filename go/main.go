@@ -433,7 +433,7 @@ var Categories []Category
 
 func initCategories() error {
 	err := dbx.Select(&Categories, "SELECT * FROM `categories`")
-	for _, category := range Categories {
+	for i, category := range Categories {
 		if category.ParentID != 0 {
 			parentCategory, err := getCategoryByID(dbx, category.ParentID)
 			if err != nil {
@@ -441,6 +441,7 @@ func initCategories() error {
 			}
 			category.ParentCategoryName = parentCategory.CategoryName
 		}
+		Categories[i] = category
 	}
 	return err
 }
