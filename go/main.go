@@ -429,6 +429,35 @@ func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err
 	return userSimple, err
 }
 
+var Categories []Category
+
+func initCategories() error {
+	err := dbx.Select(&Categories, "SELECT * FROM `categories`")
+	for _, category := range Categories {
+		if category.ParentID != 0 {
+			parentCategory, err := getCategoryByID(dbx, category.ParentID)
+			if err != nil {
+				return err
+			}
+			category.ParentCategoryName = parentCategory.CategoryName
+		}
+	}
+	return err
+}
+
+func getCategoryFromArr(categoryID int) Category {
+	c := Category{}
+	for _, category := range Categories {
+		if category.ID == categoryID {
+			c.ID = category.ID
+			c.ParentID = category.ParentID
+			c.CategoryName = category.CategoryName
+			c.ParentCategoryName = category.ParentCategoryName
+		}
+	}
+	return c
+}
+
 // TODO ここはキャッシュできる?
 func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err error) {
 	err = sqlx.Get(q, &category, "SELECT * FROM `categories` WHERE `id` = ?", categoryID)
@@ -514,6 +543,13 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = initCategories()
+	if err != nil {
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "category init error")
+		return
+	}
+
 	res := resInitialize{
 		// キャンペーン実施時には還元率の設定を返す。詳しくはマニュアルを参照のこと。
 		Campaign: 0,
@@ -587,11 +623,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 			outputErrorMsg(w, http.StatusNotFound, "seller not found")
 			return
 		}
-		category, err := getCategoryByID(dbx, item.CategoryID)
-		if err != nil {
-			outputErrorMsg(w, http.StatusNotFound, "category not found")
-			return
-		}
+		category := getCategoryFromArr(item.CategoryID)
 		itemSimples = append(itemSimples, ItemSimple{
 			ID:         item.ID,
 			SellerID:   item.SellerID,
@@ -629,8 +661,8 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rootCategory, err := getCategoryByID(dbx, rootCategoryID)
-	if err != nil || rootCategory.ParentID != 0 {
+	rootCategory := getCategoryFromArr(rootCategoryID)
+	if rootCategory.ParentID != 0 {
 		outputErrorMsg(w, http.StatusNotFound, "category not found")
 		return
 	}
@@ -715,11 +747,7 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 			outputErrorMsg(w, http.StatusNotFound, "seller not found")
 			return
 		}
-		category, err := getCategoryByID(dbx, item.CategoryID)
-		if err != nil {
-			outputErrorMsg(w, http.StatusNotFound, "category not found")
-			return
-		}
+		category := getCategoryFromArr(item.CategoryID)
 		itemSimples = append(itemSimples, ItemSimple{
 			ID:         item.ID,
 			SellerID:   item.SellerID,
@@ -825,11 +853,7 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 
 	itemSimples := []ItemSimple{}
 	for _, item := range items {
-		category, err := getCategoryByID(dbx, item.CategoryID)
-		if err != nil {
-			outputErrorMsg(w, http.StatusNotFound, "category not found")
-			return
-		}
+		category := getCategoryFromArr(item.CategoryID)
 		itemSimples = append(itemSimples, ItemSimple{
 			ID:         item.ID,
 			SellerID:   item.SellerID,
@@ -1004,11 +1028,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			outputErrorMsg(w, http.StatusNotFound, "seller not found")
 			return
 		}
-		category, err := getCategoryByID(dbx, item.CategoryID)
-		if err != nil {
-			outputErrorMsg(w, http.StatusNotFound, "category not found")
-			return
-		}
+		category := getCategoryFromArr(item.CategoryID)
 		itemDetail := &ItemDetail{
 			ID:       item.ID,
 			SellerID: item.SellerID,
@@ -1107,11 +1127,7 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	category, err := getCategoryByID(dbx, item.CategoryID)
-	if err != nil {
-		outputErrorMsg(w, http.StatusNotFound, "category not found")
-		return
-	}
+	category := getCategoryFromArr(item.CategoryID)
 
 	seller, err := getUserSimpleByID(dbx, item.SellerID)
 	if err != nil {
@@ -1397,14 +1413,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	category, err := getCategoryByID(tx, targetItem.CategoryID)
-	if err != nil {
-		log.Print(err)
-
-		outputErrorMsg(w, http.StatusInternalServerError, "category id error")
-		tx.Rollback()
-		return
-	}
+	category := getCategoryFromArr(targetItem.CategoryID)
 
 	// 取引履歴を挿入
 	result, err := tx.Exec("INSERT INTO `transaction_evidences` (`seller_id`, `buyer_id`, `status`, `item_id`, `item_name`, `item_price`, `item_description`,`item_category_id`,`item_root_category_id`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -2042,8 +2051,8 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	category, err := getCategoryByID(dbx, categoryID)
-	if err != nil || category.ParentID == 0 {
+	category := getCategoryFromArr(categoryID)
+	if category.ParentID == 0 {
 		log.Print(categoryID, category)
 		outputErrorMsg(w, http.StatusBadRequest, "Incorrect category ID")
 		return
