@@ -2174,7 +2174,7 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 	}
 
 	seller := User{}
-	seller, err := getUserWithCache(tx, user.ID)
+	seller, err = getUserWithCache(tx, user.ID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "user not found")
 		tx.Rollback()
