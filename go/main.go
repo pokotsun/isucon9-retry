@@ -393,6 +393,10 @@ func getUserWithCache(q sqlx.Queryer, userID int64) (User, error) {
 	return user, err
 }
 
+func updateUserWithCache(user User, userID int64) {
+	userMap.Store(userID, user)
+}
+
 func getUser(r *http.Request) (user User, errCode int, errMsg string) {
 	session := getSession(r)
 	userID, ok := session.Values["user_id"]
@@ -2118,17 +2122,17 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
-	_, err = tx.Exec("UPDATE `users` SET `num_sell_items`=?, `last_bump`=? WHERE `id`=?",
-		seller.NumSellItems+1,
-		now,
-		seller.ID,
-	)
+	user, err = getUserWithCache(tx, seller.ID)
 	if err != nil {
 		log.Print(err)
 
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		return
 	}
+	user.NumSellItems = seller.NumSellItems + 1
+	user.LastBump = now
+	updateUserWithCache(user, seller.ID)
+
 	tx.Commit()
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
@@ -2220,15 +2224,14 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = tx.Exec("UPDATE `users` SET `last_bump`=? WHERE id=?",
-		now,
-		seller.ID,
-	)
+	user, err = getUserWithCache(tx, seller.ID)
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		return
 	}
+	user.LastBump = now
+	updateUserWithCache(user, seller.ID)
 
 	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ?", itemID)
 	if err != nil {
