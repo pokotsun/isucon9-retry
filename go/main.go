@@ -397,6 +397,15 @@ func updateUserWithCache(user User, userID int64) {
 	userMap.Store(userID, user)
 }
 
+func initUsers() {
+	users := []User{}
+
+	dbx.Select(&users, "SELECT * FROM users")
+	for _, user := range users {
+		userMap.Store(user.ID, user)
+	}
+}
+
 func getUser(r *http.Request) (user User, errCode int, errMsg string) {
 	session := getSession(r)
 	userID, ok := session.Values["user_id"]
@@ -526,6 +535,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	updateConfigWithCache("payment_service_url", ri.PaymentServiceURL)
 	updateConfigWithCache("shipment_service_url", ri.ShipmentServiceURL)
 
+	initUsers()
 	err = initCategories()
 	if err != nil {
 		log.Print(err)
