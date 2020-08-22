@@ -1042,6 +1042,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var wait sync.WaitGroup
 	itemDetails := []*ItemDetail{}
 	for rows.Next() {
 		item := Item{}
@@ -1108,27 +1109,34 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		if shipID.Valid && reserveID.Valid {
 			shipIDValue := shipID.Int64
 			shipStatusValue := shipStatus.String
-			// reserveIDValue := reserveID.String
+			reserveIDValue := reserveID.String
 			itemDetail.TransactionEvidenceID = shipIDValue
 			itemDetail.TransactionEvidenceStatus = shipStatusValue
 
-			// ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
-			// 	ReserveID: reserveIDValue,
-			// })
-			// if err != nil {
-			// 	log.Print(err)
-			// 	outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
-			// 	return
-			// }
+			if itemDetail.Status != "on_sale" {
+				if itemDetail.Status == "sold_out" {
+					itemDetail.ShippingStatus = "done"
+				} else {
+					wait.Add(1)
+					go func() {
 
-			// itemDetail.ShippingStatus = ssr.Status
-			if itemDetail.Status == "sold_out" {
-				itemDetail.ShippingStatus = "done"
+						ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
+							ReserveID: reserveIDValue,
+						})
+						if err != nil {
+							log.Print(err)
+							outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
+							return
+						}
+						itemDetail.ShippingStatus = ssr.Status
+						wait.Done()
+					}()
+				}
 			}
-
 		}
 		itemDetails = append(itemDetails, itemDetail)
 	}
+	wait.Wait()
 
 	hasNext := false
 	if len(itemDetails) > TransactionsPerPage {
