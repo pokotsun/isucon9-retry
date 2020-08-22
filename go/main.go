@@ -1113,13 +1113,14 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			itemDetail.TransactionEvidenceID = shipIDValue
 			itemDetail.TransactionEvidenceStatus = shipStatusValue
 
-			if itemDetail.Status != "on_sale" {
-				if itemDetail.Status == "sold_out" {
-					itemDetail.ShippingStatus = "done"
-				} else {
+			switch itemDetail.Status {
+			case "on_sale":
+			case "sold_out":
+				itemDetail.ShippingStatus = "done"
+			default:
+				{
 					wait.Add(1)
 					go func() {
-
 						ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
 							ReserveID: reserveIDValue,
 						})
@@ -1144,10 +1145,10 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		itemDetails = itemDetails[0:TransactionsPerPage]
 	}
 
-	log.Print("sellerID: ", user.ID)
-	for i, item := range itemDetails {
-		log.Print(fmt.Sprintf("%d: ID: %d, Price: %d, Status: %s, shippingStatus: %s\n", i+1, item.ID, item.Price, item.Status, item.ShippingStatus))
-	}
+	// log.Print("sellerID: ", user.ID)
+	// for i, item := range itemDetails {
+	// 	log.Print(fmt.Sprintf("%d: ID: %d, Price: %d, Status: %s, shippingStatus: %s\n", i+1, item.ID, item.Price, item.Status, item.ShippingStatus))
+	// }
 
 	rts := resTransactions{
 		Items:   itemDetails,
