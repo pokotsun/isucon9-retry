@@ -459,7 +459,6 @@ func getCategoryFromArr(categoryID int) Category {
 	return c
 }
 
-// TODO ここはキャッシュできる?
 func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err error) {
 	err = sqlx.Get(q, &category, "SELECT * FROM `categories` WHERE `id` = ?", categoryID)
 	if category.ParentID != 0 {
@@ -485,8 +484,22 @@ func getConfigByName(name string) (string, error) {
 	return config.Val, err
 }
 
+var serviceUrlMap sync.Map
+
+func getConfigByNameWithCache(name string) (string, bool) {
+	cached, ok := serviceUrlMap.Load(name)
+	if ok {
+		return cached.(string), ok
+	}
+	return "", ok
+}
+
+func updateConfigWithCache(name, url string) {
+	userMap.Store(name, url)
+}
+
 func getPaymentServiceURL() string {
-	val, _ := getConfigByName("payment_service_url")
+	val, _ := getConfigByNameWithCache("payment_service_url")
 	if val == "" {
 		return DefaultPaymentServiceURL
 	}
@@ -494,7 +507,7 @@ func getPaymentServiceURL() string {
 }
 
 func getShipmentServiceURL() string {
-	val, _ := getConfigByName("shipment_service_url")
+	val, _ := getConfigByNameWithCache("shipment_service_url")
 	if val == "" {
 		return DefaultShipmentServiceURL
 	}
@@ -523,26 +536,28 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = dbx.Exec(
-		"INSERT INTO `configs` (`name`, `val`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `val` = VALUES(`val`)",
-		"payment_service_url",
-		ri.PaymentServiceURL,
-	)
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
-	}
-	_, err = dbx.Exec(
-		"INSERT INTO `configs` (`name`, `val`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `val` = VALUES(`val`)",
-		"shipment_service_url",
-		ri.ShipmentServiceURL,
-	)
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		return
-	}
+	updateConfigWithCache("payment_service_url", ri.PaymentServiceURL)
+	// _, err = dbx.Exec(
+	// 	"INSERT INTO `configs` (`name`, `val`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `val` = VALUES(`val`)",
+	// 	"payment_service_url",
+	// 	ri.PaymentServiceURL,
+	// )
+	// if err != nil {
+	// 	log.Print(err)
+	// 	outputErrorMsg(w, http.StatusInternalServerError, "db error")
+	// 	return
+	// }
+	updateConfigWithCache("shipment_service_url", ri.ShipmentServiceURL)
+	// _, err = dbx.Exec(
+	// 	"INSERT INTO `configs` (`name`, `val`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `val` = VALUES(`val`)",
+	// 	"shipment_service_url",
+	// 	ri.ShipmentServiceURL,
+	// )
+	// if err != nil {
+	// 	log.Print(err)
+	// 	outputErrorMsg(w, http.StatusInternalServerError, "db error")
+	// 	return
+	// }
 
 	err = initCategories()
 	if err != nil {
