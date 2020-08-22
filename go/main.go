@@ -471,19 +471,6 @@ func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err err
 	return category, err
 }
 
-func getConfigByName(name string) (string, error) {
-	config := Config{}
-	err := dbx.Get(&config, "SELECT * FROM `configs` WHERE `name` = ?", name)
-	if err == sql.ErrNoRows {
-		return "", nil
-	}
-	if err != nil {
-		log.Print(err)
-		return "", err
-	}
-	return config.Val, err
-}
-
 var serviceUrlMap sync.Map
 
 func getConfigByNameWithCache(name string) (string, bool) {
@@ -537,27 +524,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updateConfigWithCache("payment_service_url", ri.PaymentServiceURL)
-	// _, err = dbx.Exec(
-	// 	"INSERT INTO `configs` (`name`, `val`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `val` = VALUES(`val`)",
-	// 	"payment_service_url",
-	// 	ri.PaymentServiceURL,
-	// )
-	// if err != nil {
-	// 	log.Print(err)
-	// 	outputErrorMsg(w, http.StatusInternalServerError, "db error")
-	// 	return
-	// }
 	updateConfigWithCache("shipment_service_url", ri.ShipmentServiceURL)
-	// _, err = dbx.Exec(
-	// 	"INSERT INTO `configs` (`name`, `val`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `val` = VALUES(`val`)",
-	// 	"shipment_service_url",
-	// 	ri.ShipmentServiceURL,
-	// )
-	// if err != nil {
-	// 	log.Print(err)
-	// 	outputErrorMsg(w, http.StatusInternalServerError, "db error")
-	// 	return
-	// }
 
 	err = initCategories()
 	if err != nil {
