@@ -1141,7 +1141,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 
 	log.Print("sellerID: ", user.ID)
 	for i, item := range itemDetails {
-		log.Print(fmt.Sprintf("%d: ID: %d, Price: %d, Status: %s\n", i+1, item.ID, item.Price, item.Status))
+		log.Print(fmt.Sprintf("%d: ID: %d, Price: %d, Status: %s, shippingStatus: %s\n", i+1, item.ID, item.Price, item.Status, item.ShippingStatus))
 	}
 
 	rts := resTransactions{
