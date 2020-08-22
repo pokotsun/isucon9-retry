@@ -1084,6 +1084,11 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		itemDetails = itemDetails[0:TransactionsPerPage]
 	}
 
+	log.Print("sellerID: ", user.ID)
+	for i, itemDetail := range itemDetails {
+		log.Print(i+1, ": ", itemDetail)
+	}
+
 	rts := resTransactions{
 		Items:   itemDetails,
 		HasNext: hasNext,
