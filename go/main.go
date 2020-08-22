@@ -911,7 +911,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	if itemID > 0 && createdAt > 0 {
 		// paging
 		query := `
-			SELECT 
+			(SELECT 
 				i.id, 
 				i.seller_id, 
 				i.status, 
@@ -933,12 +933,40 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				INNER JOIN shippings AS s 
 				ON t.id = s.transaction_evidence_id 
 			) AS ship ON i.id = ship.item_id
-			WHERE (i.seller_id = ? OR i.buyer_id = ?)
-				AND (i.created_at < ? OR (i.created_at <= ? AND i.id < ?))
-			ORDER BY i.created_at DESC, i.id DESC LIMIT ?
+			WHERE i.seller_id = ?
+				AND (i.created_at < ? OR (i.created_at <= ? AND i.id < ?)))
+			UNION
+			(SELECT 
+				i.id, 
+				i.seller_id, 
+				i.status, 
+				i.name, 
+				i.price,
+				i.description, 
+				i.image_name, 
+				i.category_id,
+				i.created_at, 
+				i.buyer_id, 
+				ship.id as ship_id, 
+				ship.reserve_id,
+				ship.status as ship_status
+			FROM items AS i
+			LEFT JOIN (
+				SELECT 
+					t.id, t.status, t.item_id, s.reserve_id 
+				FROM transaction_evidences AS t 
+				INNER JOIN shippings AS s 
+				ON t.id = s.transaction_evidence_id 
+			) AS ship ON i.id = ship.item_id
+			WHERE i.buyer_id = ?
+				AND (i.created_at < ? OR (i.created_at <= ? AND i.id < ?)))
+			ORDER BY created_at DESC, id DESC LIMIT ?
 			`
 		rows, err = dbx.Queryx(query,
 			user.ID,
+			time.Unix(createdAt, 0),
+			time.Unix(createdAt, 0),
+			itemID,
 			user.ID,
 			time.Unix(createdAt, 0),
 			time.Unix(createdAt, 0),
@@ -953,7 +981,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// 1st page
 		query := `
-			SELECT
+			(SELECT
 				i.id, 
 				i.seller_id, 
 				i.status, 
@@ -975,8 +1003,32 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				INNER JOIN shippings AS s
 				ON t.id = s.transaction_evidence_id
 			) AS ship ON i.id = ship.item_id
-			WHERE (i.seller_id = ? OR i.buyer_id = ?)
-			ORDER BY i.created_at DESC, i.id DESC LIMIT ?
+			WHERE i.seller_id = ?)
+			UNION
+			(SELECT
+				i.id, 
+				i.seller_id, 
+				i.status, 
+				i.name, 
+				i.price,
+				i.description, 
+				i.image_name, 
+				i.category_id,
+				i.created_at, 
+				i.buyer_id, 
+				ship.id as ship_id, 
+				ship.reserve_id,
+				ship.status as ship_status
+			FROM items as i
+			LEFT JOIN (
+				SELECT 
+					t.id, t.status, t.item_id, s.reserve_id
+				FROM transaction_evidences AS t
+				INNER JOIN shippings AS s
+				ON t.id = s.transaction_evidence_id
+			) AS ship ON i.id = ship.item_id
+			WHERE i.buyer_id = ?)
+			ORDER BY created_at DESC, id DESC LIMIT ?
 			`
 		rows, err = dbx.Queryx(query,
 			user.ID,
