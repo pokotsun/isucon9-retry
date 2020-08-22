@@ -1122,6 +1122,9 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			// }
 
 			// itemDetail.ShippingStatus = ssr.Status
+			if itemDetail.Status == "sold_out" {
+				itemDetail.ShippingStatus = "done"
+			}
 
 		}
 		itemDetails = append(itemDetails, itemDetail)
