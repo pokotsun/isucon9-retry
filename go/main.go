@@ -916,6 +916,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				i.seller_id, 
 				i.status, 
 				i.name, 
+				i.price,
 				i.description, 
 				i.image_name, 
 				i.category_id,
@@ -957,6 +958,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				i.seller_id, 
 				i.status, 
 				i.name, 
+				i.price,
 				i.description, 
 				i.image_name, 
 				i.category_id,
@@ -1000,6 +1002,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			&item.SellerID,
 			&item.Status,
 			&item.Name,
+			&item.Price,
 			&item.Description,
 			&item.ImageName,
 			&item.CategoryID,
@@ -1085,8 +1088,8 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Print("sellerID: ", user.ID)
-	for i, itemDetail := range itemDetails {
-		log.Print(i+1, ": ", itemDetail)
+	for i, item := range itemDetails {
+		log.Print(fmt.Sprintf("%d: ID: %d, Price: %d, Status: %s\n", i+1, item.ID, item.Price, item.Status))
 	}
 
 	rts := resTransactions{
